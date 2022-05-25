@@ -11,10 +11,10 @@ include common.mk
 
 CFLAGS = -I./src
 CFLAGS += -O2
-CFLAGS += -std=gnu99 -Wall -W
+CFLAGS += -std=gnu99 -Wall -W -g
 CFLAGS += -DUNUSED="__attribute__((unused))"
 CFLAGS += -DNDEBUG
-LDFLAGS =
+LDFLAGS = -lpthread -fsanitize=thread
 
 # standard build rules
 .SUFFIXES: .o .c
@@ -27,6 +27,7 @@ OBJS = \
     src/http_parser.o \
     src/http_request.o \
     src/timer.o \
+	src/thpool.o \
     src/mainloop.o
 deps += $(OBJS:%.o=%.o.d)
 
@@ -36,6 +37,9 @@ $(TARGET): $(OBJS)
 
 check: all
 	@scripts/test.sh
+
+htstress: src/htstress.c
+	$(CC) $(CFLAGS_user) -o $@ $< $(LDFLAGS)
 
 clean:
 	$(VECHO) "  Cleaning...\n"

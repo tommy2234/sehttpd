@@ -11,12 +11,16 @@
 
 #include "http.h"
 #include "logger.h"
+#include "thpool.h"
 #include "timer.h"
 
 /* the length of the struct epoll_events array pointed to by *events */
 #define MAXEVENTS 1024
 
 #define LISTENQ 1024
+
+#define N_THREADS 8
+#define N_JOBS 512
 
 static int open_listenfd(int port)
 {
@@ -107,14 +111,21 @@ int main()
 
     timer_init();
 
+    // threadpool_t *pool = threadpool_create(N_THREADS, N_JOBS, 0);
+    threadpool pool = thpool_init(N_THREADS);
+
     printf("Web server started.\n");
 
     /* epoll_wait loop */
     while (1) {
+        pthread_mutex_lock(&timer_lock);
         int time = find_timer();
+        pthread_mutex_unlock(&timer_lock);
         debug("wait time = %d", time);
         int n = epoll_wait(epfd, events, MAXEVENTS, time);
+        pthread_mutex_lock(&timer_lock);
         handle_expired_timers();
+        pthread_mutex_unlock(&timer_lock);
 
         for (int i = 0; i < n; i++) {
             http_request_t *r = events[i].data.ptr;
@@ -149,7 +160,9 @@ int main()
                     event.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
                     epoll_ctl(epfd, EPOLL_CTL_ADD, infd, &event);
 
+                    pthread_mutex_lock(&timer_lock);
                     add_timer(request, TIMEOUT_DEFAULT, http_close_conn);
+                    pthread_mutex_unlock(&timer_lock);
                 }
             } else {
                 if ((events[i].events & EPOLLERR) ||
@@ -160,7 +173,14 @@ int main()
                     continue;
                 }
 
-                do_request(events[i].data.ptr);
+                // do_request(events[i].data.ptr);
+                thpool_add_work(pool, do_request, events[i].data.ptr);
+                /*
+                if(pool->count < N_JOBS){
+                    if(threadpool_add(pool, do_request, events[i].data.ptr, 0))
+                        log_err("add task fail");
+                }
+                */
             }
         }
     }

@@ -236,7 +236,7 @@ void do_request(void *ptr)
 
         if (n < 0) {
             if (errno != EAGAIN) {
-                log_err("read err, and errno = %d", errno);
+                // log_err("read err, and errno = %d", errno);
                 goto err;
             }
             break;
@@ -250,7 +250,7 @@ void do_request(void *ptr)
         if (rc == EAGAIN)
             continue;
         if (rc != 0) {
-            log_err("rc != 0");
+            // log_err("rc != 0, rc = %d", rc);
             goto err;
         }
 
@@ -261,7 +261,7 @@ void do_request(void *ptr)
         if (rc == EAGAIN)
             continue;
         if (rc != 0) {
-            log_err("rc != 0");
+            log_err("rc != 0 rc = %d", rc);
             goto err;
         }
 
@@ -311,12 +311,15 @@ void do_request(void *ptr)
     };
     epoll_ctl(r->epfd, EPOLL_CTL_MOD, r->fd, &event);
 
+    pthread_mutex_lock(&timer_lock);
     add_timer(r, TIMEOUT_DEFAULT, http_close_conn);
+    pthread_mutex_unlock(&timer_lock);
     return;
 
 err:
 close:
     /* TODO: handle the timeout raised by inactive connections */
-    rc = http_close_conn(r);
+    // rc = http_close_conn(r);
+    rc = close(r->fd);
     assert(rc == 0 && "do_request: http_close_conn");
 }
