@@ -11,7 +11,8 @@
 
 #include "http.h"
 #include "logger.h"
-#include "thpool.h"
+#include "memory_pool.h"
+#include "thread_pool.h"
 #include "timer.h"
 
 /* the length of the struct epoll_events array pointed to by *events */
@@ -20,7 +21,6 @@
 #define LISTENQ 1024
 
 #define N_THREADS 8
-#define N_JOBS 512
 
 static int open_listenfd(int port)
 {
@@ -89,6 +89,9 @@ int main()
         return 0;
     }
 
+    init_req_pool();
+    init_job_pool();
+
     int listenfd = open_listenfd(PORT);
     int rc UNUSED = sock_set_non_blocking(listenfd);
     assert(rc == 0 && "sock_set_non_blocking");
@@ -100,7 +103,7 @@ int main()
     struct epoll_event *events = malloc(sizeof(struct epoll_event) * MAXEVENTS);
     assert(events && "epoll_event: malloc");
 
-    http_request_t *request = malloc(sizeof(http_request_t));
+    http_request_t *request = get_request();
     init_http_request(request, listenfd, epfd, WEBROOT);
 
     struct epoll_event event = {
@@ -149,7 +152,7 @@ int main()
                     rc = sock_set_non_blocking(infd);
                     assert(rc == 0 && "sock_set_non_blocking");
 
-                    request = malloc(sizeof(http_request_t));
+                    request = get_request();
                     if (!request) {
                         log_err("malloc");
                         break;
@@ -175,12 +178,6 @@ int main()
 
                 // do_request(events[i].data.ptr);
                 thpool_add_work(pool, do_request, events[i].data.ptr);
-                /*
-                if(pool->count < N_JOBS){
-                    if(threadpool_add(pool, do_request, events[i].data.ptr, 0))
-                        log_err("add task fail");
-                }
-                */
             }
         }
     }

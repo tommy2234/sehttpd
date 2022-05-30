@@ -319,7 +319,6 @@ void do_request(void *ptr)
 err:
 close:
     /* TODO: handle the timeout raised by inactive connections */
-    // rc = http_close_conn(r);
-    rc = close(r->fd);
+    rc = http_close_conn(r);
     assert(rc == 0 && "do_request: http_close_conn");
 }

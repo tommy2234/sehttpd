@@ -1,14 +1,3 @@
-/* ********************************
- * Author:       Johan Hanssen Seferidis
- * License:	     MIT
- * Description:  Library providing a threading pool where you can add
- *               work. For usage, check the thpool.h file or README.md
- *
- */
-/** @file thpool.h */ /*
-                       *
-                       ********************************/
-
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <pthread.h>
@@ -21,7 +10,8 @@
 #include <sys/prctl.h>
 #endif
 
-#include "thpool.h"
+#include "memory_pool.h"
+#include "thread_pool.h"
 
 #ifdef THPOOL_DEBUG
 #define THPOOL_DEBUG 1
@@ -37,55 +27,6 @@
 
 static volatile int threads_keepalive;
 static volatile int threads_on_hold;
-
-
-
-/* ========================== STRUCTURES ============================ */
-
-
-/* Binary semaphore */
-typedef struct bsem {
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
-    int v;
-} bsem;
-
-
-/* Job */
-typedef struct job {
-    struct job *prev;            /* pointer to previous job   */
-    void (*function)(void *arg); /* function pointer          */
-    void *arg;                   /* function's argument       */
-} job;
-
-
-/* Job queue */
-typedef struct jobqueue {
-    pthread_mutex_t rwmutex; /* used for queue r/w access */
-    job *front;              /* pointer to front of queue */
-    job *rear;               /* pointer to rear  of queue */
-    bsem *has_jobs;          /* flag as binary semaphore  */
-    int len;                 /* number of jobs in queue   */
-} jobqueue;
-
-
-/* Thread */
-typedef struct thread {
-    int id;                   /* friendly id               */
-    pthread_t pthread;        /* pointer to actual thread  */
-    struct thpool_ *thpool_p; /* access to thpool          */
-} thread;
-
-
-/* Threadpool */
-typedef struct thpool_ {
-    thread **threads;                 /* pointer to threads        */
-    volatile int num_threads_alive;   /* threads currently alive   */
-    volatile int num_threads_working; /* threads currently working */
-    pthread_mutex_t thcount_lock;     /* used for thread count etc */
-    pthread_cond_t threads_all_idle;  /* signal to thpool_wait     */
-    jobqueue jobqueue;                /* job queue                 */
-} thpool_;
 
 
 
@@ -108,7 +49,6 @@ static void bsem_reset(struct bsem *bsem_p);
 static void bsem_post(struct bsem *bsem_p);
 static void bsem_post_all(struct bsem *bsem_p);
 static void bsem_wait(struct bsem *bsem_p);
-
 
 
 /* ========================== THREADPOOL ============================ */
@@ -176,7 +116,7 @@ int thpool_add_work(thpool_ *thpool_p, void (*function_p)(void *), void *arg_p)
 {
     job *newjob;
 
-    newjob = (struct job *) malloc(sizeof(struct job));
+    newjob = get_job();
     if (newjob == NULL) {
         err("thpool_add_work(): Could not allocate memory for new job\n");
         return -1;
@@ -367,7 +307,7 @@ static void *thread_do(struct thread *thread_p)
                 void (*func_buff)(void *) = job_p->function;
                 void *arg_buff = job_p->arg;
                 func_buff(arg_buff);
-                free(job_p);
+                free_job(job_p);
             }
 
             pthread_mutex_lock(&thpool_p->thcount_lock);
@@ -420,7 +360,7 @@ static int jobqueue_init(jobqueue *jobqueue_p)
 static void jobqueue_clear(jobqueue *jobqueue_p)
 {
     while (jobqueue_p->len) {
-        free(jobqueue_pull(jobqueue_p));
+        free_job(jobqueue_pull(jobqueue_p));
     }
 
     jobqueue_p->front = NULL;
