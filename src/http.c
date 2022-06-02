@@ -102,7 +102,8 @@ static void do_error(int fd,
                      char *cause,
                      char *errnum,
                      char *shortmsg,
-                     char *longmsg)
+                     char *longmsg,
+                     http_request_t *r)
 {
     char header[MAXLINE], body[MAXLINE];
 
@@ -120,8 +121,10 @@ static void do_error(int fd,
             "Content-length: %d\r\n\r\n",
             errnum, shortmsg, (int) strlen(body));
 
-    writen(fd, header, strlen(header));
-    writen(fd, body, strlen(body));
+    // writen(fd, header, strlen(header));
+    // writen(fd, body, strlen(body));
+    add_write_request(r->ring, r, header);
+    add_write_request(r->ring, r, body);
 }
 
 static const char *get_file_type(const char *type)
@@ -154,7 +157,8 @@ static const char *get_msg_from_status(int status_code)
 static void serve_static(int fd,
                          char *filename,
                          size_t filesize,
-                         http_out_t *out)
+                         http_out_t *out,
+                         http_request_t *r)
 {
     char header[MAXLINE];
 
@@ -183,12 +187,15 @@ static void serve_static(int fd,
     sprintf(header, "%sServer: seHTTPd\r\n", header);
     sprintf(header, "%s\r\n", header);
 
+    /*
     size_t n = (size_t) writen(fd, header, strlen(header));
     assert(n == strlen(header) && "writen error");
     if (n != strlen(header)) {
         log_err("n != strlen(header)");
         return;
     }
+    */
+    add_write_request(r->ring, r, header);
 
     if (!out->modified)
         return;
@@ -200,7 +207,8 @@ static void serve_static(int fd,
     assert(srcaddr != (void *) -1 && "mmap error");
     close(srcfd);
 
-    writen(fd, srcaddr, filesize);
+    // writen(fd, srcaddr, filesize);
+    add_write_request(r->ring, r, srcaddr);
 
     munmap(srcaddr, filesize);
 }
@@ -214,108 +222,83 @@ static inline int init_http_out(http_out_t *o, int fd)
     return 0;
 }
 
-void do_request(void *ptr)
+void do_request(void *ptr, int read_bytes)
 {
     http_request_t *r = ptr;
     int fd = r->fd;
     int rc;
+    int n = read_bytes;
     char filename[SHORTLINE];
     webroot = r->root;
 
-    del_timer(r);
-    for (;;) {
-        char *plast = &r->buf[r->last % MAX_BUF];
-        size_t remain_size =
-            MIN(MAX_BUF - (r->last - r->pos) - 1, MAX_BUF - r->last % MAX_BUF);
-
-        int n = read(fd, plast, remain_size);
-        assert(r->last - r->pos < MAX_BUF && "request buffer overflow!");
-
-        if (n == 0) /* EOF */
-            goto err;
-
-        if (n < 0) {
-            if (errno != EAGAIN) {
-                log_err("read err, and errno = %d", errno);
-                goto err;
-            }
-            break;
-        }
-
-        r->last += n;
-        assert(r->last - r->pos < MAX_BUF && "request buffer overflow!");
-
-        /* about to parse request line */
-        rc = http_parse_request_line(r);
-        if (rc == EAGAIN)
-            continue;
-        if (rc != 0) {
-            log_err("rc != 0");
-            goto err;
-        }
-
-        debug("uri = %.*s", (int) (r->uri_end - r->uri_start),
-              (char *) r->uri_start);
-
-        rc = http_parse_request_body(r);
-        if (rc == EAGAIN)
-            continue;
-        if (rc != 0) {
-            log_err("rc != 0");
-            goto err;
-        }
-
-        /* handle http header */
-        http_out_t *out = malloc(sizeof(http_out_t));
-        if (!out) {
-            log_err("no enough space for http_out_t");
-            exit(1);
-        }
-
-        init_http_out(out, fd);
-
-        parse_uri(r->uri_start, r->uri_end - r->uri_start, filename);
-
-        struct stat sbuf;
-        if (stat(filename, &sbuf) < 0) {
-            do_error(fd, filename, "404", "Not Found", "Can't find the file");
-            continue;
-        }
-
-        if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) {
-            do_error(fd, filename, "403", "Forbidden", "Can't read the file");
-            continue;
-        }
-
-        out->mtime = sbuf.st_mtime;
-
-        http_handle_header(r, out);
-        assert(list_empty(&(r->list)) && "header list should be empty");
-
-        if (!out->status)
-            out->status = HTTP_OK;
-
-        serve_static(fd, filename, sbuf.st_size, out);
-
-        if (!out->keep_alive) {
-            debug("no keep_alive! ready to close");
-            free(out);
-            goto close;
-        }
-        free(out);
+    if (n == 0) /* EOF */
+        goto err;
+    else if (n < 0 && errno != EAGAIN) {
+        log_err("read err, and errno = %d", errno);
+        goto err;
     }
 
-    struct epoll_event event = {
-        .data.ptr = ptr,
-        .events = EPOLLIN | EPOLLET | EPOLLONESHOT,
-    };
-    epoll_ctl(r->epfd, EPOLL_CTL_MOD, r->fd, &event);
+    r->pos = 0;
+    r->last = n;
+    assert(r->last - r->pos < MAX_BUF && "request buffer overflow!");
 
-    add_timer(r, TIMEOUT_DEFAULT, http_close_conn);
+    /* about to parse request line */
+    rc = http_parse_request_line(r);
+    if (rc && rc != EAGAIN) {
+        log_err("rc != 0");
+        goto err;
+    }
+
+    debug("uri = %.*s", (int) (r->uri_end - r->uri_start),
+          (char *) r->uri_start);
+
+    rc = http_parse_request_body(r);
+    if (rc && rc != EAGAIN) {
+        log_err("rc != 0");
+        goto err;
+    }
+
+    /* handle http header */
+    http_out_t *out = malloc(sizeof(http_out_t));
+    if (!out) {
+        log_err("no enough space for http_out_t");
+        exit(1);
+    }
+    init_http_out(out, fd);
+
+    parse_uri(r->uri_start, r->uri_end - r->uri_start, filename);
+
+    struct stat sbuf;
+    if (stat(filename, &sbuf) < 0) {
+        do_error(fd, filename, "404", "Not Found", "Can't find the file", r);
+        return;
+    }
+
+    if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) {
+        do_error(fd, filename, "403", "Forbidden", "Can't read the file", r);
+        return;
+    }
+
+    out->mtime = sbuf.st_mtime;
+    http_handle_header(r, out);
+    assert(list_empty(&(r->list)) && "header list should be empty");
+
+    if (!out->status)
+        out->status = HTTP_OK;
+
+    serve_static(fd, filename, sbuf.st_size, out, r);
+
+    if (!out->keep_alive) {
+        r->keep_alive = false;
+        debug("no keep_alive! ready to close");
+        free(out);
+        return;
+    }
+
+    free(out);
     return;
 
 err:
-close:
     /* TODO: handle the timeout raised by inactive connections */
     rc = http_close_conn(r);
     assert(rc == 0 && "do_request: http_close_conn");
