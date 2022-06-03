@@ -84,6 +84,8 @@ int main()
         pthread_create(&threads[i], NULL, &server_loop, &thread_data[i]);
     }
 
+    printf("Web server started!\n");
+
     for (int i = 0; i < NT; i++) {
         pthread_join(threads[i], NULL);
     }

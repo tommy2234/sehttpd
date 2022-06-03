@@ -38,8 +38,11 @@ $(TARGET): $(OBJS)
 check: all
 	@scripts/test.sh
 
+htstress: src/htstress.c
+	$(CC) -o $@ $< -g -lpthread
+
 clean:
 	$(VECHO) "  Cleaning...\n"
-	$(Q)$(RM) $(TARGET) $(OBJS) $(deps)
+	$(Q)$(RM) $(TARGET) $(OBJS) $(deps) htstress
 
 -include $(deps)
