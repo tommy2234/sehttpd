@@ -20,7 +20,7 @@
 
 #define LISTENQ 1024
 
-#define N_THREADS 8
+#define N_THREADS 4
 
 static int open_listenfd(int port)
 {
