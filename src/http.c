@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "http.h"
+#include "io_uring.h"
 #include "logger.h"
 #include "timer.h"
 
@@ -231,13 +232,6 @@ void do_request(void *ptr, int read_bytes)
     int n = read_bytes;
     char filename[SHORTLINE];
     webroot = r->root;
-
-    if (n == 0) /* EOF */
-        goto err;
-    else if (n < 0 && errno != EAGAIN) {
-        log_err("read err, and errno = %d", errno);
-        goto err;
-    }
 
     r->pos = 0;
     r->last = n;

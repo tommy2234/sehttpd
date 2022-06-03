@@ -1,6 +1,7 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <liburing.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,10 +14,8 @@
 #include "logger.h"
 #include "timer.h"
 
-/* the length of the struct epoll_events array pointed to by *events */
-#define MAXEVENTS 1024
-
 #define LISTENQ 1024
+#define NT 4
 
 static int open_listenfd(int port)
 {
@@ -52,6 +51,15 @@ static int open_listenfd(int port)
 #define PORT 8081
 #define WEBROOT "./www"
 
+typedef struct thread_data {
+    struct io_uring ring;
+    int tid;
+    int listenfd;
+} thread_data_t;
+
+void *server_loop(void *arg);
+bool threads_alive = true;
+
 int main()
 {
     /* when a fd is closed by remote, writing to this fd will cause system
@@ -66,15 +74,38 @@ int main()
 
     int listenfd = open_listenfd(PORT);
 
-    struct io_uring *ring = malloc(sizeof(*ring));
-    io_uring_init(ring);
+    pthread_t *threads = malloc(NT * sizeof(pthread_t));
+    thread_data_t *thread_data = malloc(NT * sizeof(thread_data_t));
+    for (int i = 0; i < NT; i++) {
+        io_uring_init(&thread_data[i].ring);
+        thread_data[i].listenfd = listenfd;
+        thread_data[i].tid = i;
+        pthread_create(&threads[i], NULL, &server_loop, &thread_data[i]);
+    }
+
+    for (int i = 0; i < NT; i++) {
+        pthread_join(threads[i], NULL);
+    }
+    free(threads);
+    free(thread_data);
+
+    return 0;
+}
+
+void *server_loop(void *arg)
+{
+    thread_data_t *data = arg;
+    int listenfd = data->listenfd;
+    int tid = data->tid;
+    struct io_uring *ring = &data->ring;
+
     http_request_t *r = malloc(sizeof(*r));
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
     add_accept_request(ring, r, listenfd, (struct sockaddr *) &client_addr,
                        &client_len);
 
-    while (1) {
+    while (threads_alive) {
         struct io_uring_cqe *cqe;
         io_uring_wait_cqe(ring, &cqe);
         http_request_t *cqe_req = io_uring_cqe_get_data(cqe);
@@ -92,10 +123,9 @@ int main()
         } else if (type == READ) {
             int read_bytes = cqe->res;
             if (read_bytes <= 0) {
-                if (read_bytes < 0) {
+                if (read_bytes < 0)
                     fprintf(stderr, "Async request failed: %s for event: %d\n",
                             strerror(-cqe->res), cqe_req->event_type);
-                }
                 int ret = http_close_conn(cqe_req);
                 assert(ret == 0 && "http_close_conn");
             } else {
@@ -104,10 +134,9 @@ int main()
         } else if (type == WRITE) {
             int write_bytes = cqe->res;
             if (write_bytes <= 0) {
-                if (write_bytes < 0) {
+                if (write_bytes < 0)
                     fprintf(stderr, "Async request failed: %s for event: %d\n",
                             strerror(-cqe->res), cqe_req->event_type);
-                }
                 int ret = http_close_conn(cqe_req);
                 assert(ret == 0 && "http_close_conn");
             } else {
@@ -123,5 +152,5 @@ int main()
     }
     io_uring_queue_exit(ring);
 
-    return 0;
+    return NULL;
 }

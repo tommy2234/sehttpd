@@ -12,13 +12,10 @@
 int http_close_conn(http_request_t *r)
 {
     /* An open file description continues to exist until all file descriptors
-     * referring to it have been closed. A file descriptor is removed from an
-     * epoll set only after all the file descriptors referring to the
-     * underlying open file description have been closed (or before if the
-     * descriptor is explicitly removed using epoll_ctl(2) EPOLL_CTL_DEL).
+     * referring to it have been closed.
      */
     close(r->fd);
-    // free(r);
+    free(r);
     return 0;
 }
 
