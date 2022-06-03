@@ -7,6 +7,7 @@
 #include <sys/time.h>
 
 #include "io_uring.h"
+#include "memory_pool.h"
 
 void io_uring_init(struct io_uring *ring)
 {
@@ -42,7 +43,7 @@ void add_read_request(struct io_uring *ring, http_request_t *r)
     io_uring_sqe_set_flags(sqe, IOSQE_IO_LINK);
     io_uring_sqe_set_data(sqe, r);
 
-    r = malloc(sizeof(http_request_t));
+    r = get_request(r->tid);
     add_timeout_request(ring, r);
     io_uring_submit(ring);
 }
@@ -58,7 +59,7 @@ void add_write_request(struct io_uring *ring, http_request_t *r, void *buf)
     io_uring_sqe_set_flags(sqe, IOSQE_IO_LINK);
     io_uring_sqe_set_data(sqe, r);
 
-    r = malloc(sizeof(http_request_t));
+    r = get_request(r->tid);
     add_timeout_request(ring, r);
     io_uring_submit(ring);
 }

@@ -12,7 +12,7 @@
 #include "http.h"
 #include "io_uring.h"
 #include "logger.h"
-#include "timer.h"
+#include "memory_pool.h"
 
 #define LISTENQ 1024
 #define NT 4
@@ -73,6 +73,7 @@ int main()
     }
 
     int listenfd = open_listenfd(PORT);
+    init_req_pool(NT);
 
     pthread_t *threads = malloc(NT * sizeof(pthread_t));
     thread_data_t *thread_data = malloc(NT * sizeof(thread_data_t));
@@ -99,7 +100,7 @@ void *server_loop(void *arg)
     int tid = data->tid;
     struct io_uring *ring = &data->ring;
 
-    http_request_t *r = malloc(sizeof(*r));
+    http_request_t *r = get_request(tid);
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
     add_accept_request(ring, r, listenfd, (struct sockaddr *) &client_addr,
@@ -116,7 +117,7 @@ void *server_loop(void *arg)
                                (struct sockaddr *) &client_addr, &client_len);
             int clientfd = cqe->res;
             if (clientfd >= 0) {
-                http_request_t *request = malloc(sizeof(http_request_t));
+                http_request_t *request = get_request(tid);
                 init_http_request(request, clientfd, WEBROOT, ring);
                 add_read_request(ring, request);
             }
@@ -146,7 +147,7 @@ void *server_loop(void *arg)
                     add_read_request(ring, cqe_req);
             }
         } else if (type == TIMEOUT) {
-            free(cqe_req);
+            free_request(cqe_req);
         }
         io_uring_cq_advance(ring, 1);
     }

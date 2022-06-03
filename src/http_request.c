@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "http.h"
+#include "memory_pool.h"
 
 int http_close_conn(http_request_t *r)
 {
@@ -15,7 +16,7 @@ int http_close_conn(http_request_t *r)
      * referring to it have been closed.
      */
     close(r->fd);
-    free(r);
+    free_request(r);
     return 0;
 }
 

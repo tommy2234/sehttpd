@@ -34,7 +34,6 @@ enum event_types { ACCEPT, READ, WRITE, TIMEOUT };
 typedef struct {
     void *root;
     int fd;
-    int epfd;
     char buf[MAX_BUF]; /* ring buffer */
     size_t pos, last;
     int state;
@@ -48,7 +47,8 @@ typedef struct {
     void *cur_header_key_start, *cur_header_key_end;
     void *cur_header_value_start, *cur_header_value_end;
 
-    void *timer;
+    int tid;
+    int pool_id;
     enum event_types event_type;
     struct io_uring *ring;
     bool keep_alive;

@@ -3,7 +3,6 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/epoll.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -11,7 +10,6 @@
 #include "http.h"
 #include "io_uring.h"
 #include "logger.h"
-#include "timer.h"
 
 #define MAXLINE 8192
 #define SHORTLINE 512

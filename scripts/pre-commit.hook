@@ -3,7 +3,6 @@
 CPPCHECK_suppresses="--suppress=missingInclude \
                      --suppress=sprintfOverlappingData:src/http.c \
                      --suppress=unusedFunction \
-                     --suppress=unreadVariable \
                      --inline-suppr"
 CPPCHECK_OPTS="-I. --enable=all --error-exitcode=1 --force $CPPCHECK_suppresses ."
 
