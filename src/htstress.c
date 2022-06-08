@@ -344,6 +344,7 @@ int main(int argc, char *argv[])
     struct addrinfo *result, *rp;
     struct addrinfo hints;
 
+    /*
     sighandler_t ret = signal(SIGINT, signal_exit);
     if (ret == SIG_ERR) {
         perror("signal(SIGINT, handler)");
@@ -355,6 +356,7 @@ int main(int argc, char *argv[])
         perror("signal(SIGTERM, handler)");
         exit(0);
     }
+    */
 
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;
@@ -498,7 +500,7 @@ int main(int argc, char *argv[])
 
     ticks = max_requests / 10;
 
-    signal(SIGINT, &sigint_handler);
+    // signal(SIGINT, &sigint_handler);
 
     if (!max_requests) {
         ticks = 1000;
