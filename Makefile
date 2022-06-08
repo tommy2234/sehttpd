@@ -10,7 +10,7 @@ $(GIT_HOOKS):
 include common.mk
 
 CFLAGS = -I./src
-CFLAGS += -O0
+CFLAGS += -O2
 CFLAGS += -std=gnu99 -Wall -W -g
 CFLAGS += -DUNUSED="__attribute__((unused))"
 CFLAGS += -DNDEBUG
