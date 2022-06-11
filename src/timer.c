@@ -60,21 +60,24 @@ static bool prio_queue_delmin(struct list_head *prio_queue)
 /* add a new item to the heap */
 static bool prio_queue_insert(timer_node *item, struct list_head *prio_queue)
 {
-    struct list_head *curr, *next;
+    struct list_head *curr = NULL, *next;
+    nalloc++;
+    if (list_empty(prio_queue)) {
+        list_add(&item->link, prio_queue);
+        return true;
+    }
     list_for_each_safe (curr, next, prio_queue) {
         timer_node *node = list_entry(curr, timer_node, link);
-        if (item->key <= node->key || curr == prio_queue)
-            list_insert(&item->link, &node->link);
+        if (item->key <= node->key) {
+            list_insert(&item->link, curr);
+            break;
+        } else if (curr->next == prio_queue) {
+            list_add_tail(&item->link, prio_queue);
+            break;
+        }
     }
-    nalloc++;
 
     return true;
-}
-
-/* FIXME: segmentation fault in multithread environment */
-static int timer_comp(void *ti, void *tj)
-{
-    return ((timer_node *) ti)->key < ((timer_node *) tj)->key ? 1 : 0;
 }
 
 static struct list_head timers;
@@ -110,7 +113,7 @@ int find_timer()
         if (node->deleted) {
             bool ret UNUSED = prio_queue_delmin(&timers);
             assert(ret && "prio_queue_delmin");
-            // free(node);
+            free(node);
             continue;
         }
 
@@ -135,7 +138,7 @@ void handle_expired_timers()
         if (node->deleted) {
             ret = prio_queue_delmin(&timers);
             assert(ret && "handle_expired_timers: prio_queue_delmin error");
-            // free(node);
+            free(node);
             continue;
         }
 
@@ -174,15 +177,5 @@ void del_timer(http_request_t *req)
     assert(node && "del_timer: req->timers is NULL");
 
     node->deleted = true;
-    list_del(&node->link);
-}
-
-void rearm_timer(http_request_t *req)
-{
-    time_update();
-    timer_node *node = req->timer;
-    node->deleted = false;
-    node->key = current_msec + TIMEOUT_DEFAULT;
-    bool ret UNUSED = prio_queue_insert(node, &timers);
-    assert(ret && "add_timer: prio_queue_insert error");
+    // list_del(&node->link);
 }
