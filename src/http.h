@@ -45,6 +45,7 @@ typedef struct {
     void *cur_header_key_start, *cur_header_key_end;
     void *cur_header_value_start, *cur_header_value_end;
 
+    bool freed;
     void *timer;
 } http_request_t;
 
@@ -86,6 +87,7 @@ static inline void init_http_request(http_request_t *r,
     r->pos = r->last = 0;
     r->state = 0;
     r->root = root;
+    r->freed = false;
     INIT_LIST_HEAD(&(r->list));
 }
 

@@ -222,7 +222,9 @@ void do_request(void *ptr)
     char filename[SHORTLINE];
     webroot = r->root;
 
+    pthread_mutex_lock(&timer_lock);
     del_timer(r);
+    pthread_mutex_unlock(&timer_lock);
     for (;;) {
         char *plast = &r->buf[r->last % MAX_BUF];
         size_t remain_size =
@@ -312,14 +314,17 @@ void do_request(void *ptr)
     epoll_ctl(r->epfd, EPOLL_CTL_MOD, r->fd, &event);
 
     pthread_mutex_lock(&timer_lock);
-    add_timer(r, TIMEOUT_DEFAULT, http_close_conn);
+    // add_timer(r, TIMEOUT_DEFAULT, http_close_conn);
+    rearm_timer(r);
     pthread_mutex_unlock(&timer_lock);
     return;
 
 err:
 close:
     /* TODO: handle the timeout raised by inactive connections */
-    // rc = http_close_conn(r);
-    rc = close(r->fd);
+    // r->freed = true;
+    // close(r->fd);
+    free(r->timer);
+    rc = http_close_conn(r);
     assert(rc == 0 && "do_request: http_close_conn");
 }

@@ -18,6 +18,7 @@ int http_close_conn(http_request_t *r)
      * descriptor is explicitly removed using epoll_ctl(2) EPOLL_CTL_DEL).
      */
     close(r->fd);
+    // r->freed = true;
     free(r);
     return 0;
 }

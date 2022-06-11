@@ -47,6 +47,18 @@ static inline void __list_del(struct list_head *prev, struct list_head *next)
 static inline void list_del(struct list_head *entry)
 {
     __list_del(entry->prev, entry->next);
+    entry->prev = (struct list_head *) (0x00100100);
+    entry->next = (struct list_head *) (0x00200200);
+}
+
+/* Insert new node as pos->prev */
+static inline void list_insert(struct list_head *_new, struct list_head *pos)
+{
+    struct list_head *prev = pos->prev;
+    prev->next = _new;
+    _new->prev = prev;
+    pos->prev = _new;
+    _new->next = pos;
 }
 
 static inline int list_empty(struct list_head *head)
