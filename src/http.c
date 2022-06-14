@@ -296,15 +296,17 @@ void do_request(void *ptr)
 
 end:;
     r->pos = r->last = 0;
+
+    pthread_mutex_lock(&timer_lock);
+    add_timer(r, TIMEOUT_DEFAULT, http_close_conn);
+    pthread_mutex_unlock(&timer_lock);
+
     struct epoll_event event = {
         .data.ptr = ptr,
         .events = EPOLLIN | EPOLLET | EPOLLONESHOT,
     };
     epoll_ctl(r->epfd, EPOLL_CTL_MOD, r->fd, &event);
 
-    pthread_mutex_lock(&timer_lock);
-    add_timer(r, TIMEOUT_DEFAULT, http_close_conn);
-    pthread_mutex_unlock(&timer_lock);
     return;
 
 err:
