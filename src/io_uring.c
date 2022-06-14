@@ -9,11 +9,13 @@
 #include "io_uring.h"
 #include "memory_pool.h"
 
-void io_uring_init(struct io_uring *ring)
+void io_uring_init(struct io_uring *ring, struct io_uring_params *params)
 {
+    /*
     struct io_uring_params params;
     memset(&params, 0, sizeof(params));
-    int ret = io_uring_queue_init_params(QUEUE_DEPTH, ring, &params);
+    */
+    int ret UNUSED = io_uring_queue_init_params(QUEUE_DEPTH, ring, params);
     assert(ret >= 0 && "io_uring_queue_init");
 }
 

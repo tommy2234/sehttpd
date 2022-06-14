@@ -8,7 +8,7 @@
 #define QUEUE_DEPTH 8192
 #define TIMEOUT_DEFAULT 500
 
-void io_uring_init(struct io_uring *ring);
+void io_uring_init(struct io_uring *ring, struct io_uring_params *params);
 void add_accept_request(struct io_uring *ring,
                         http_request_t *r,
                         int listenfd,

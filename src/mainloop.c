@@ -74,11 +74,17 @@ int main()
 
     int listenfd = open_listenfd(PORT);
     init_req_pool(NT);
-
     pthread_t *threads = malloc(NT * sizeof(pthread_t));
     thread_data_t *thread_data = malloc(NT * sizeof(thread_data_t));
-    for (int i = 0; i < NT; i++) {
-        io_uring_init(&thread_data[i].ring);
+
+    /* Initialize io_uring and create threads */
+    struct io_uring_params params;
+    memset(&params, 0, sizeof(params));
+    io_uring_queue_init_params(QUEUE_DEPTH, &thread_data[0].ring, &params);
+    params.flags = IORING_SETUP_ATTACH_WQ;
+    params.wq_fd = thread_data[0].ring.ring_fd;
+    for (int i = 1; i < NT; i++) {
+        io_uring_queue_init_params(QUEUE_DEPTH, &thread_data[i].ring, &params);
         thread_data[i].listenfd = listenfd;
         thread_data[i].tid = i;
         pthread_create(&threads[i], NULL, &server_loop, &thread_data[i]);
@@ -129,8 +135,7 @@ void *server_loop(void *arg)
                 if (read_bytes < 0)
                     fprintf(stderr, "Async request failed: %s for event: %d\n",
                             strerror(-cqe->res), cqe_req->event_type);
-                int ret = http_close_conn(cqe_req);
-                assert(ret == 0 && "http_close_conn");
+                http_close_conn(cqe_req);
             } else {
                 do_request(cqe_req, read_bytes);
             }
@@ -140,8 +145,7 @@ void *server_loop(void *arg)
                 if (write_bytes < 0)
                     fprintf(stderr, "Async request failed: %s for event: %d\n",
                             strerror(-cqe->res), cqe_req->event_type);
-                int ret = http_close_conn(cqe_req);
-                assert(ret == 0 && "http_close_conn");
+                http_close_conn(cqe_req);
             } else {
                 if (cqe_req->keep_alive == false)
                     http_close_conn(cqe_req);
