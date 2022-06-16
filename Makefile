@@ -14,7 +14,7 @@ CFLAGS += -O2
 CFLAGS += -std=gnu99 -Wall -W -g
 CFLAGS += -DUNUSED="__attribute__((unused))"
 CFLAGS += -DNDEBUG
-LDFLAGS = -lpthread
+LDFLAGS = -lpthread -g
 
 # standard build rules
 .SUFFIXES: .o .c

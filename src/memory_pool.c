@@ -1,100 +1,91 @@
 #include "memory_pool.h"
 
 #define POOL_SZ 8192
-#define BITMAP_SZ POOL_SZ / 32
-uint32_t req_bitmap[BITMAP_SZ];
-uint32_t job_bitmap[BITMAP_SZ];
-http_request_t *req_pool;
-job *job_pool;
-pthread_mutex_t job_pool_lock;
-pthread_mutex_t req_pool_lock;
 
-int init_req_pool()
+struct {
+    http_request_t **pool;
+    int next;
+    pthread_mutex_t lock;
+    int size;
+} req_pool;
+
+struct {
+    job **pool;
+    int next;
+    pthread_mutex_t lock;
+    int size;
+} job_pool;
+
+int init_req_pool(int nt)
 {
-    pthread_mutex_init(&req_pool_lock, NULL);
-    req_pool = malloc(POOL_SZ * sizeof(http_request_t));
-    for (int i = 0; i < POOL_SZ; i++) {
-        if (!&req_pool[i]) {
-            printf("req_pool %d malloc fail\n", i);
-            exit(1);
-        }
-        req_pool[i].pool_id = i;
+    pthread_mutex_init(&req_pool.lock, NULL);
+    http_request_t ***pool = &req_pool.pool;
+    *pool = malloc(nt * POOL_SZ * sizeof(http_request_t *));
+    for (int i = 0; i < nt * POOL_SZ; i++) {
+        (*pool)[i] = malloc(sizeof(http_request_t));
     }
-    for (int i = 0; i < BITMAP_SZ; i++) {
-        req_bitmap[i] |= 0xffffffff;
-    }
+    req_pool.next = 0;
+    req_pool.size = nt * POOL_SZ;
+
     return 0;
 }
 
-int init_job_pool()
+int init_job_pool(int nt)
 {
-    pthread_mutex_init(&job_pool_lock, NULL);
-    job_pool = malloc(POOL_SZ * sizeof(job));
-    for (int i = 0; i < POOL_SZ; i++) {
-        if (!&job_pool[i]) {
-            printf("job_pool %d malloc fail\n", i);
-            exit(1);
-        }
-        job_pool[i].pool_id = i;
+    pthread_mutex_init(&job_pool.lock, NULL);
+    job ***pool = &job_pool.pool;
+    *pool = malloc(nt * POOL_SZ * sizeof(job *));
+    for (int i = 0; i < nt * POOL_SZ; i++) {
+        (*pool)[i] = malloc(sizeof(job));
     }
-    for (int i = 0; i < BITMAP_SZ; i++) {
-        job_bitmap[i] |= 0xffffffff;
-    }
+    job_pool.next = 0;
+    job_pool.size = nt * POOL_SZ;
+
     return 0;
 }
 
-inline http_request_t *get_request()
+void get_request(http_request_t **r)
 {
-    pthread_mutex_lock(&req_pool_lock);
-    for (int i = 0; i < BITMAP_SZ; i++) {
-        uint32_t bitset = req_bitmap[i];
-        if (bitset == 0)
-            continue;
-
-        int shift = __builtin_ffs(bitset) - 1;
-        req_bitmap[i] ^= (0x1 << shift);
-        int pos = 32 * i + shift;
-        pthread_mutex_unlock(&req_pool_lock);
-        return &req_pool[pos];
+    pthread_mutex_t *lock = &req_pool.lock;
+    pthread_mutex_lock(lock);
+    int idx = req_pool.next++;
+    if (idx == req_pool.size) {
+        printf("Too much client connected!\n");
+        pthread_mutex_unlock(lock);
+        *r = NULL;
     }
-    printf("Too much client connected!\n");
-    pthread_mutex_unlock(&req_pool_lock);
-    return NULL;
+    *r = req_pool.pool[idx];
+    pthread_mutex_unlock(lock);
 }
 
-inline job *get_job()
+void get_job(job **j)
 {
-    pthread_mutex_lock(&job_pool_lock);
-    for (int i = 0; i < BITMAP_SZ; i++) {
-        uint32_t bitset = job_bitmap[i];
-        if (bitset == 0)
-            continue;
-
-        int shift = __builtin_ffs(bitset) - 1;
-        job_bitmap[i] ^= (0x1 << shift);
-        int pos = 32 * i + shift;
-        pthread_mutex_unlock(&job_pool_lock);
-        return &job_pool[pos];
+    pthread_mutex_t *lock = &job_pool.lock;
+    pthread_mutex_lock(lock);
+    int idx = job_pool.next++;
+    if (idx == job_pool.size) {
+        printf("Too much client connected!\n");
+        pthread_mutex_unlock(lock);
+        *j = NULL;
     }
-    printf("Too much request!\n");
-    pthread_mutex_unlock(&job_pool_lock);
-    return NULL;
+    *j = job_pool.pool[idx];
+    pthread_mutex_unlock(lock);
 }
 
-int free_request(http_request_t *req)
+int free_request(http_request_t *r)
 {
-    pthread_mutex_lock(&req_pool_lock);
-    int pos = req->pool_id;
-    req_bitmap[pos / 32] ^= (0x1 << (pos % 32));
-    pthread_mutex_unlock(&req_pool_lock);
+    pthread_mutex_lock(&req_pool.lock);
+    int idx = --req_pool.next;
+    req_pool.pool[idx] = r;
+    pthread_mutex_unlock(&req_pool.lock);
     return 0;
 }
 
 int free_job(job *j)
 {
-    pthread_mutex_lock(&job_pool_lock);
-    int pos = j->pool_id;
-    job_bitmap[pos / 32] ^= (0x1 << (pos % 32));
-    pthread_mutex_unlock(&job_pool_lock);
+    pthread_mutex_lock(&job_pool.lock);
+    int idx = --job_pool.next;
+    job_pool.pool[idx] = j;
+    pthread_mutex_unlock(&job_pool.lock);
     return 0;
 }

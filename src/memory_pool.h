@@ -9,11 +9,11 @@
 #include "http.h"
 #include "thread_pool.h"
 
-int init_req_pool();
-int init_job_pool();
-http_request_t *get_request();
-job *get_job();
-int free_request(http_request_t *req);
-int free_job(job *req);
+int init_req_pool(int nt);
+int init_job_pool(int nt);
+void get_request(http_request_t **r);
+void get_job(job **j);
+int free_request(http_request_t *r);
+int free_job(job *j);
 
 #endif

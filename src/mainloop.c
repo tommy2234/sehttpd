@@ -89,8 +89,8 @@ int main()
         return 0;
     }
 
-    init_req_pool();
-    init_job_pool();
+    init_req_pool(N_THREADS);
+    init_job_pool(N_THREADS);
 
     int listenfd = open_listenfd(PORT);
     int rc UNUSED = sock_set_non_blocking(listenfd);
@@ -103,7 +103,8 @@ int main()
     struct epoll_event *events = malloc(sizeof(struct epoll_event) * MAXEVENTS);
     assert(events && "epoll_event: malloc");
 
-    http_request_t *request = get_request();
+    http_request_t *request;
+    get_request(&request);
     init_http_request(request, listenfd, epfd, WEBROOT);
 
     struct epoll_event event = {
@@ -152,7 +153,7 @@ int main()
                     rc = sock_set_non_blocking(infd);
                     assert(rc == 0 && "sock_set_non_blocking");
 
-                    request = get_request();
+                    get_request(&request);
                     if (!request) {
                         log_err("malloc");
                         break;

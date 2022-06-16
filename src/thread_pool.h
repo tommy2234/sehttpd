@@ -21,7 +21,6 @@ typedef struct job {
     struct job *prev;            /* pointer to previous job   */
     void (*function)(void *arg); /* function pointer          */
     void *arg;                   /* function's argument       */
-    int pool_id;
 } job;
 
 

@@ -116,7 +116,7 @@ int thpool_add_work(thpool_ *thpool_p, void (*function_p)(void *), void *arg_p)
 {
     job *newjob;
 
-    newjob = get_job();
+    get_job(&newjob);
     if (newjob == NULL) {
         err("thpool_add_work(): Could not allocate memory for new job\n");
         return -1;
