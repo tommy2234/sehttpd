@@ -48,7 +48,6 @@ typedef struct {
     void *cur_header_value_start, *cur_header_value_end;
 
     int tid;
-    int pool_id;
     enum event_types event_type;
     struct io_uring *ring;
     bool keep_alive;
