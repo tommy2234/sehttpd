@@ -1,11 +1,11 @@
 # seHTTPd
 
 `seHTTPd` implements a small and efficient web server with 1K lines of C code.
-I/O multiplexing is achieved using [epoll](http://man7.org/linux/man-pages/man7/epoll.7.html).
+Asynchronous I/O is achieved using [io_uring](https://kernel.dk/io_uring.pdf).
 
 ## Features
 
-* Single-threaded, non-blocking I/O based on event-driven model
+* Multi-threaded, non-blocking I/O based on event-driven model
 * HTTP persistent connection (HTTP Keep-Alive)
 * A timer for executing the handler after having waited the specified time
 
@@ -25,7 +25,7 @@ I/O multiplexing is achieved using [epoll](http://man7.org/linux/man-pages/man7/
 
 ## Build from Source
 
-At the moment, `seHTTPd` supports Linux based systems with epoll system call.
+At the moment, `seHTTPd` supports Linux based systems with io_uring system call.
 Building `seHTTPd` is straightforward.
 ```shell
 $ make
